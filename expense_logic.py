@@ -231,6 +231,58 @@ class ExpenseSplitter:
             }
         return summary
 
+    def get_optimized_transactions(self) -> List[Dict[str, Any]]:
+        """
+        Compute the optimized list of transactions (debtor → creditor → amount)
+        using the same greedy algorithm as get_simplified_settlements, but
+        without aggregating by person.
+        """
+        # Calculate net balance for each person (positive = owed money, negative = owes money)
+        net_balances = {}
+        for person in self.people:
+            owes = sum(self.final_balances[person].values())
+            owed = sum(balances.get(person, 0) for balances in self.final_balances.values())
+            net_balances[person] = round(owed - owes, 2)
+
+        # Separate creditors (positive balance) and debtors (negative balance)
+        creditors = [(person, amount) for person, amount in net_balances.items() if amount > 0.01]
+        debtors = [(person, -amount) for person, amount in net_balances.items() if amount < -0.01]
+
+        # Sort by amount (largest first)
+        creditors.sort(key=lambda x: x[1], reverse=True)
+        debtors.sort(key=lambda x: x[1], reverse=True)
+
+        transactions: List[Dict[str, Any]] = []
+        creditor_idx = 0
+        debtor_idx = 0
+
+        while creditor_idx < len(creditors) and debtor_idx < len(debtors):
+            creditor_name, credit_amount = creditors[creditor_idx]
+            debtor_name, debt_amount = debtors[debtor_idx]
+
+            # Determine transaction amount
+            transaction_amount = min(credit_amount, debt_amount)
+
+            if transaction_amount > 0.01:  # Only record significant amounts
+                transactions.append({
+                    "From": debtor_name,
+                    "To": creditor_name,
+                    "Amount": round(transaction_amount, 2)
+                })
+
+            # Update remaining amounts
+            creditors[creditor_idx] = (creditor_name, credit_amount - transaction_amount)
+            debtors[debtor_idx] = (debtor_name, debt_amount - transaction_amount)
+
+            # Move to next creditor/debtor if current one is settled
+            if creditors[creditor_idx][1] < 0.01:
+                creditor_idx += 1
+            if debtors[debtor_idx][1] < 0.01:
+                debtor_idx += 1
+
+        return transactions
+
+
     def process_expenses(self, expense_data: pd.DataFrame) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Dict[str, float]]]:
         """
         Process all expenses and return settlements and summary.

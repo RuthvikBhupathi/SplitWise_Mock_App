@@ -45,21 +45,28 @@ def main():
 
         # Display simplified settlements
         print("\n" + "="*50)
-        print("SIMPLIFIED SETTLEMENT (Optimized)")
+        print("SIMPLIFIED SETTLEMENT")
         print("="*50)
-        if simplified_settlements:
-            for person_data in simplified_settlements:
-                person = person_data['Person']
-                pays_to = person_data['Pays_To']
-                amount = person_data['Amount']
 
-                if pays_to == "Nobody":
-                    print(f"✅ {person} pays $0.00")
-                else:
-                    print(f"💳 {person} pays {pays_to} {amount}")
-        else:
+        # Use the optimized per-transaction view and print it grouped by payer
+        optimized_transactions = expense_splitter.get_optimized_transactions()
+
+        if not optimized_transactions:
             print("🎉 Everyone is even! No payments needed.")
+        else:
+            from collections import defaultdict
+
+            grouped = defaultdict(list)
+            for tx in optimized_transactions:
+                grouped[tx["From"]].append(tx)
+
+            for debtor, txs in grouped.items():
+                print(f"{debtor} pays:")
+                for tx in txs:
+                    print(f"💸 ${tx['Amount']:.2f} → {tx['To']}")
+
         print("="*50 + "\n")
+
 
         # Save results
         print("💾 Saving settlement data...")
